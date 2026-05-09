@@ -16,13 +16,6 @@ const io = new Server(httpServer, { cors: { origin: '*' } });
 app.use(cors());
 app.use(express.json());
 
-// Serve built React client in production
-const clientDist = join(__dirname, '..', 'client', 'dist');
-if (existsSync(clientDist)) {
-  app.use(express.static(clientDist));
-  app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
-}
-
 const rooms = new Map();
 
 function generateRoomCode() {
@@ -126,6 +119,13 @@ io.on('connection', (socket) => {
     console.log('disconnect', socket.id);
   });
 });
+
+// Serve built React client — must be registered AFTER all API/socket routes
+const clientDist = join(__dirname, '..', 'client', 'dist');
+if (existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
+}
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => console.log(`Blokus server on :${PORT}`));
