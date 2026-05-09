@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useGameStore } from '../store.js';
@@ -131,7 +131,21 @@ function Scene() {
   const {
     gameState, color, selectedPieceId, rotation, flipped,
     hoveredCell, setHoveredCell, isMyTurn,
+    cameraSnapTo, clearCameraSnap,
   } = useGameStore();
+
+  const { camera } = useThree();
+  const orbitRef = useRef();
+
+  useEffect(() => {
+    if (!cameraSnapTo) return;
+    camera.position.set(...cameraSnapTo);
+    if (orbitRef.current) {
+      orbitRef.current.target.set(9.5, 0, 9.5);
+      orbitRef.current.update();
+    }
+    clearCameraSnap();
+  }, [cameraSnapTo]);
 
   const handleClick = useCallback(([row, col]) => {
     if (!isMyTurn() || !selectedPieceId) return;
@@ -175,6 +189,7 @@ function Scene() {
 
       {/* Disable orbit while placing so clicks reach the InteractionPlane */}
       <OrbitControls
+        ref={orbitRef}
         enabled={!placingMode}
         target={[9.5, 0, 9.5]}
         minPolarAngle={Math.PI / 10}

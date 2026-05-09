@@ -11,6 +11,7 @@ export const useGameStore = create((set, get) => ({
   flipped: false,
   hoveredCell: null,
   errorMessage: null,
+  cameraSnapTo: null,
 
   setPlayerName: (name) => set({ playerName: name }),
   setColor: (color) => set({ color }),
@@ -21,6 +22,8 @@ export const useGameStore = create((set, get) => ({
   setFlipped: (f) => set({ flipped: f }),
   setHoveredCell: (cell) => set({ hoveredCell: cell }),
   setError: (msg) => set({ errorMessage: msg }),
+  setCameraSnapTo: (pos) => set({ cameraSnapTo: pos }),
+  clearCameraSnap: () => set({ cameraSnapTo: null }),
 
   rotate: () => set(s => ({ rotation: (s.rotation + 1) % 4 })),
   flip: () => set(s => ({ flipped: !s.flipped })),

@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGameStore } from '../store.js';
 import { PIECES, getTransformedSquares } from '../pieces.js';
 import { COLOR_HEX } from '../colors.js';
+import socket from '../socket.js';
 
-const CELL = 14;
-const PREVIEW_CELL = 28;
+const CELL = 22;
+const PREVIEW_CELL = 44;
 
-// Blokus piece sizes for grouping
 const SIZE_GROUPS = [
   { size: 1, label: '1 Square' },
   { size: 2, label: '2 Squares' },
@@ -25,7 +25,7 @@ function PieceGrid({ squares, cellSize, color }) {
       display: 'grid',
       gridTemplateRows: `repeat(${maxR}, ${cellSize}px)`,
       gridTemplateColumns: `repeat(${maxC}, ${cellSize}px)`,
-      gap: 1.5,
+      gap: 2,
     }}>
       {Array.from({ length: maxR }, (_, r) =>
         Array.from({ length: maxC }, (_, c) => (
@@ -35,7 +35,7 @@ function PieceGrid({ squares, cellSize, color }) {
               width: cellSize,
               height: cellSize,
               background: squareSet.has(`${r},${c}`) ? COLOR_HEX[color] : 'transparent',
-              borderRadius: 2,
+              borderRadius: 3,
             }}
           />
         ))
@@ -44,32 +44,13 @@ function PieceGrid({ squares, cellSize, color }) {
   );
 }
 
-export default function PiecePanel() {
-  const {
-    gameState, color,
-    selectedPieceId, rotation, flipped,
-    setSelectedPiece, rotate, flip, isMyTurn, myRemainingPieces,
-  } = useGameStore();
-
-  if (!gameState || gameState.status !== 'playing') return null;
-
-  const remaining = myRemainingPieces();
-  const myTurn = isMyTurn();
-
+function PiecePanelContent({ remaining, myTurn, color, selectedPieceId, rotation, flipped, setSelectedPiece, rotate, flip }) {
   return (
-    <div style={styles.panel}>
-      {/* Header */}
-      <div style={styles.header}>
-        <span style={styles.headerLabel}>Your Pieces</span>
-        <span style={{ ...styles.count, color: COLOR_HEX[color] }}>
-          {remaining.length} left
-        </span>
-      </div>
-
-      {/* Instructions — always visible */}
+    <>
+      {/* Instructions */}
       {myTurn && !selectedPieceId && (
         <div style={styles.instructBox}>
-          <div style={styles.instructStep}><span style={styles.stepNum}>1</span> Click a piece below</div>
+          <div style={styles.instructStep}><span style={styles.stepNum}>1</span> Pick a piece below</div>
           <div style={styles.instructStep}><span style={styles.stepNum}>2</span> Hover the board to preview</div>
           <div style={styles.instructStep}><span style={styles.stepNum}>3</span> Click the board to place</div>
         </div>
@@ -96,7 +77,7 @@ export default function PiecePanel() {
               ✕ <kbd style={styles.kbd}>Esc</kbd>
             </button>
           </div>
-          <p style={styles.placeHint}>→ Click the board to place</p>
+          <p style={styles.placeHint}>Tap the board to place</p>
         </div>
       )}
 
@@ -131,7 +112,7 @@ export default function PiecePanel() {
                         ...styles.pieceBtn,
                         borderColor: isSelected ? COLOR_HEX[color] : '#1e293b',
                         background: isSelected ? `${COLOR_HEX[color]}22` : '#0f172a',
-                        boxShadow: isSelected ? `0 0 8px ${COLOR_HEX[color]}88` : 'none',
+                        boxShadow: isSelected ? `0 0 10px ${COLOR_HEX[color]}88` : 'none',
                         cursor: myTurn ? 'pointer' : 'not-allowed',
                         opacity: myTurn ? 1 : 0.45,
                       }}
@@ -151,13 +132,98 @@ export default function PiecePanel() {
           All pieces placed!
         </p>
       )}
+
+      {/* Pass button */}
+      {myTurn && (
+        <button style={styles.passBtn} onClick={() => socket.emit('pass_turn')}>
+          Pass Turn
+        </button>
+      )}
+    </>
+  );
+}
+
+export default function PiecePanel() {
+  const {
+    gameState, color,
+    selectedPieceId, rotation, flipped,
+    setSelectedPiece, rotate, flip, isMyTurn, myRemainingPieces,
+  } = useGameStore();
+
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  // Auto-close drawer when piece is selected so board is visible
+  useEffect(() => {
+    if (selectedPieceId && isMobile) setDrawerOpen(false);
+  }, [selectedPieceId, isMobile]);
+
+  if (!gameState || gameState.status !== 'playing') return null;
+
+  const remaining = myRemainingPieces();
+  const myTurn = isMyTurn();
+  const accentColor = COLOR_HEX[color] ?? '#3b82f6';
+
+  const sharedProps = { remaining, myTurn, color, selectedPieceId, rotation, flipped, setSelectedPiece, rotate, flip };
+
+  if (isMobile) {
+    return (
+      <div style={styles.mobileContainer}>
+        {/* Handle bar — always visible */}
+        <button
+          style={{ ...styles.drawerHandle, borderTopColor: accentColor }}
+          onClick={() => setDrawerOpen(o => !o)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: accentColor, flexShrink: 0 }} />
+            <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 14 }}>
+              Your Pieces
+            </span>
+            <span style={{ color: accentColor, fontWeight: 800, fontSize: 14 }}>
+              {remaining.length}
+            </span>
+            {myTurn && (
+              <span style={{ color: '#22c55e', fontSize: 11, fontWeight: 700, marginLeft: 4 }}>
+                YOUR TURN
+              </span>
+            )}
+          </div>
+          <span style={{ color: '#64748b', fontSize: 18 }}>{drawerOpen ? '▼' : '▲'}</span>
+        </button>
+
+        {/* Drawer content */}
+        {drawerOpen && (
+          <div style={styles.drawerContent}>
+            <PiecePanelContent {...sharedProps} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop layout
+  return (
+    <div style={styles.panel}>
+      <div style={styles.header}>
+        <span style={styles.headerLabel}>Your Pieces</span>
+        <span style={{ ...styles.count, color: accentColor }}>
+          {remaining.length} left
+        </span>
+      </div>
+      <PiecePanelContent {...sharedProps} />
     </div>
   );
 }
 
 const styles = {
   panel: {
-    width: 260,
+    width: 300,
     background: '#0a1628',
     borderLeft: '1px solid #1e293b',
     display: 'flex',
@@ -171,11 +237,11 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 4,
+    paddingBottom: 6,
     borderBottom: '1px solid #1e293b',
   },
   headerLabel: { color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
-  count: { fontSize: 12, fontWeight: 700 },
+  count: { fontSize: 13, fontWeight: 700 },
 
   instructBox: {
     background: '#1e293b',
@@ -183,13 +249,13 @@ const styles = {
     padding: '8px 10px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 5,
+    gap: 6,
   },
-  instructStep: { display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 12 },
+  instructStep: { display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 13 },
   stepNum: {
     background: '#334155', color: '#f1f5f9', borderRadius: '50%',
-    width: 18, height: 18, display: 'flex', alignItems: 'center',
-    justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0,
+    width: 20, height: 20, display: 'flex', alignItems: 'center',
+    justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0,
   },
 
   selectedBox: {
@@ -202,7 +268,7 @@ const styles = {
     gap: 8,
   },
   previewWrap: {
-    minHeight: 60,
+    minHeight: 80,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -210,19 +276,19 @@ const styles = {
   controls: { display: 'flex', gap: 4, width: '100%' },
   ctrlBtn: {
     flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-    color: '#94a3b8', padding: '5px 4px', fontSize: 11, cursor: 'pointer',
+    color: '#94a3b8', padding: '6px 4px', fontSize: 12, cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
   },
   kbd: {
     background: '#334155', color: '#64748b', borderRadius: 3,
-    padding: '1px 4px', fontSize: 9, fontFamily: 'monospace',
+    padding: '1px 4px', fontSize: 10, fontFamily: 'monospace',
   },
-  placeHint: { color: '#22c55e', fontSize: 11, textAlign: 'center' },
+  placeHint: { color: '#22c55e', fontSize: 12, textAlign: 'center', margin: 0 },
 
-  waitingText: { color: '#475569', fontSize: 12, textAlign: 'center', padding: '4px 0' },
+  waitingText: { color: '#475569', fontSize: 13, textAlign: 'center', padding: '4px 0' },
 
-  groups: { display: 'flex', flexDirection: 'column', gap: 10 },
-  group: { display: 'flex', flexDirection: 'column', gap: 5 },
+  groups: { display: 'flex', flexDirection: 'column', gap: 12 },
+  group: { display: 'flex', flexDirection: 'column', gap: 6 },
   groupHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     paddingBottom: 2,
@@ -232,10 +298,51 @@ const styles = {
     background: '#1e293b', color: '#64748b',
     borderRadius: 8, padding: '1px 6px', fontSize: 10,
   },
-  pieceRow: { display: 'flex', flexWrap: 'wrap', gap: 5 },
+  pieceRow: { display: 'flex', flexWrap: 'wrap', gap: 6 },
   pieceBtn: {
-    padding: 5, border: '2px solid', borderRadius: 6,
+    padding: 6, border: '2px solid', borderRadius: 8,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     transition: 'border-color 0.15s, background 0.15s, box-shadow 0.15s',
+  },
+
+  passBtn: {
+    background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
+    color: '#94a3b8', padding: '8px 12px', fontSize: 13, cursor: 'pointer',
+    width: '100%', marginTop: 4,
+  },
+
+  // Mobile drawer
+  mobileContainer: {
+    position: 'fixed',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+    display: 'flex',
+    flexDirection: 'column-reverse',
+  },
+  drawerHandle: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '10px 16px',
+    background: '#0a1628',
+    borderTop: '3px solid transparent',
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderBottom: 'none',
+    cursor: 'pointer',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  drawerContent: {
+    background: '#0a1628',
+    borderTop: '1px solid #1e293b',
+    maxHeight: '52vh',
+    overflowY: 'auto',
+    padding: '12px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
   },
 };

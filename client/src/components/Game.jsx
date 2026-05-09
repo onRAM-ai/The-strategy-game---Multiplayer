@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store.js';
 import { COLOR_HEX } from '../colors.js';
 import socket from '../socket.js';
@@ -9,11 +9,27 @@ import PiecePanel from './PiecePanel.jsx';
 export default function Game() {
   const { gameState, playerName, roomCode, color, rotate, flip, setSelectedPiece, isMyTurn } = useGameStore();
 
+  const [showTurnBanner, setShowTurnBanner] = useState(false);
+  const prevTurnRef = useRef(null);
+
+  // Flash "YOUR TURN" when the turn changes to this player
+  useEffect(() => {
+    if (!gameState || gameState.status !== 'playing') return;
+    const cur = gameState.currentColor;
+    if (cur === color && cur !== prevTurnRef.current) {
+      setShowTurnBanner(true);
+      const t = setTimeout(() => setShowTurnBanner(false), 2500);
+      prevTurnRef.current = cur;
+      return () => clearTimeout(t);
+    }
+    prevTurnRef.current = cur;
+  }, [gameState?.currentColor, gameState?.status, color]);
+
   // Keyboard shortcuts: R = rotate, F = flip, Escape = deselect
   useEffect(() => {
     function onKey(e) {
       if (!isMyTurn()) return;
-      if (e.target.tagName === 'INPUT') return; // don't hijack text inputs
+      if (e.target.tagName === 'INPUT') return;
       if (e.key === 'r' || e.key === 'R') rotate();
       if (e.key === 'f' || e.key === 'F') flip();
       if (e.key === 'Escape') setSelectedPiece(null);
@@ -21,9 +37,11 @@ export default function Game() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [rotate, flip, setSelectedPiece, isMyTurn]);
+
   const isWaiting = gameState.status === 'waiting';
   const isFinished = gameState.status === 'finished';
   const isHost = gameState.players[0]?.name === playerName;
+  const accentColor = COLOR_HEX[color] ?? '#22c55e';
 
   return (
     <div style={styles.root}>
@@ -34,6 +52,15 @@ export default function Game() {
         </div>
         <PiecePanel />
       </div>
+
+      {/* YOUR TURN flash banner */}
+      {showTurnBanner && (
+        <div style={styles.turnBannerWrap} onClick={() => setShowTurnBanner(false)}>
+          <div style={{ ...styles.turnBanner, color: accentColor, borderColor: accentColor }}>
+            YOUR TURN
+          </div>
+        </div>
+      )}
 
       {isWaiting && (
         <div style={styles.overlay}>
@@ -111,6 +138,18 @@ const styles = {
   body: { display: 'flex', flex: 1, overflow: 'hidden' },
   canvas: { flex: 1 },
 
+  turnBannerWrap: {
+    position: 'absolute', inset: 0, display: 'flex',
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 20, pointerEvents: 'none',
+  },
+  turnBanner: {
+    fontSize: 42, fontWeight: 900, letterSpacing: 6,
+    padding: '16px 36px', borderRadius: 16, border: '3px solid',
+    background: 'rgba(0,0,0,0.7)',
+    animation: 'fadeInOut 2.5s ease forwards',
+  },
+
   overlay: {
     position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10,
@@ -118,7 +157,7 @@ const styles = {
   overlayCard: {
     background: '#1e293b', borderRadius: 16, padding: '32px 36px',
     display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center',
-    width: 360, boxShadow: '0 25px 50px rgba(0,0,0,0.6)',
+    width: 360, maxWidth: '90vw', boxShadow: '0 25px 50px rgba(0,0,0,0.6)',
   },
   overlayTitle: { color: '#f1f5f9', fontSize: 24, fontWeight: 800 },
   roomCodeBig: {
