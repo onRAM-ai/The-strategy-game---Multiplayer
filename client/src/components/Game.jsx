@@ -135,8 +135,8 @@ export default function Game() {
 
 const styles = {
   root: { display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative' },
-  body: { display: 'flex', flex: 1, overflow: 'hidden' },
-  canvas: { flex: 1 },
+  body: { display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' },
+  canvas: { flex: 1, minHeight: 0 },
 
   turnBannerWrap: {
     position: 'absolute', inset: 0, display: 'flex',
