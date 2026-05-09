@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import React, { useCallback, useMemo } from 'react';
+import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useGameStore } from '../store.js';
@@ -9,14 +9,9 @@ import { COLOR_HEX } from '../colors.js';
 import socket from '../socket.js';
 
 const BOARD = 20;
-const PH = 0.28; // piece height
+const PH = 0.28;
 
 const COLOR_CORNER = { blue: [0, 0], yellow: [0, 19], red: [19, 19], green: [19, 0] };
-
-// Pre-build color objects once
-const THREE_COLORS = Object.fromEntries(
-  Object.entries(COLOR_HEX).map(([k, v]) => [k, new THREE.Color(v)])
-);
 
 function BoardSurface() {
   return (
@@ -34,8 +29,7 @@ function GridLines() {
       pts.push(new THREE.Vector3(i, 0, 0), new THREE.Vector3(i, 0, BOARD));
       pts.push(new THREE.Vector3(0, 0, i), new THREE.Vector3(BOARD, 0, i));
     }
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    return geo;
+    return new THREE.BufferGeometry().setFromPoints(pts);
   }, []);
 
   return (
@@ -52,8 +46,8 @@ function CornerMarkers({ players }) {
         const [r, c] = COLOR_CORNER[p.color];
         return (
           <mesh key={p.color} position={[c + 0.5, 0.01, r + 0.5]}>
-            <boxGeometry args={[0.85, 0.05, 0.85]} />
-            <meshStandardMaterial color={COLOR_HEX[p.color]} opacity={0.5} transparent />
+            <boxGeometry args={[0.85, 0.06, 0.85]} />
+            <meshStandardMaterial color={COLOR_HEX[p.color]} opacity={0.65} transparent />
           </mesh>
         );
       })}
@@ -86,7 +80,6 @@ function PlacedPieces({ board }) {
 
 function GhostPiece({ hoveredCell, pieceId, rotation, flipped, color, board, isFirstMove }) {
   if (!hoveredCell || !pieceId) return null;
-
   const [row, col] = hoveredCell;
   const absSquares = getAbsoluteSquares(pieceId, rotation, flipped, row, col);
   const valid = isValidPlacement(board, absSquares, color, isFirstMove);
@@ -97,9 +90,9 @@ function GhostPiece({ hoveredCell, pieceId, rotation, flipped, color, board, isF
       {absSquares.map(([r, c]) => {
         if (r < 0 || r >= BOARD || c < 0 || c >= BOARD) return null;
         return (
-          <mesh key={`g${r}-${c}`} position={[c + 0.5, PH / 2 + 0.01, r + 0.5]}>
+          <mesh key={`g${r}-${c}`} position={[c + 0.5, PH / 2 + 0.02, r + 0.5]}>
             <boxGeometry args={[0.88, PH, 0.88]} />
-            <meshStandardMaterial color={ghostColor} opacity={0.55} transparent />
+            <meshStandardMaterial color={ghostColor} opacity={0.6} transparent />
           </mesh>
         );
       })}
@@ -107,6 +100,7 @@ function GhostPiece({ hoveredCell, pieceId, rotation, flipped, color, board, isF
   );
 }
 
+// Always-present interaction plane — emits events only when handleClick allows it
 function InteractionPlane({ onHover, onLeave, onClick }) {
   return (
     <mesh
@@ -134,7 +128,10 @@ function InteractionPlane({ onHover, onLeave, onClick }) {
 }
 
 function Scene() {
-  const { gameState, color, selectedPieceId, rotation, flipped, hoveredCell, setHoveredCell, isMyTurn } = useGameStore();
+  const {
+    gameState, color, selectedPieceId, rotation, flipped,
+    hoveredCell, setHoveredCell, isMyTurn,
+  } = useGameStore();
 
   const handleClick = useCallback(([row, col]) => {
     if (!isMyTurn() || !selectedPieceId) return;
@@ -144,19 +141,20 @@ function Scene() {
   if (!gameState) return null;
 
   const myTurn = isMyTurn();
+  const placingMode = myTurn && !!selectedPieceId;
   const isFirstMove = (gameState.remainingPieces?.[color]?.length ?? 0) === 21;
 
   return (
     <>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[12, 20, 12]} intensity={0.7} castShadow />
+      <ambientLight intensity={0.75} />
+      <directionalLight position={[12, 20, 12]} intensity={0.65} castShadow />
 
       <BoardSurface />
       <GridLines />
       <CornerMarkers players={gameState.players} />
       <PlacedPieces board={gameState.board} />
 
-      {myTurn && selectedPieceId && (
+      {placingMode && hoveredCell && (
         <GhostPiece
           hoveredCell={hoveredCell}
           pieceId={selectedPieceId}
@@ -168,15 +166,16 @@ function Scene() {
         />
       )}
 
-      {myTurn && selectedPieceId && (
-        <InteractionPlane
-          onHover={setHoveredCell}
-          onLeave={() => setHoveredCell(null)}
-          onClick={handleClick}
-        />
-      )}
+      {/* Always present so hover works; handleClick guards actual placement */}
+      <InteractionPlane
+        onHover={setHoveredCell}
+        onLeave={() => setHoveredCell(null)}
+        onClick={handleClick}
+      />
 
+      {/* Disable orbit while placing so clicks reach the InteractionPlane */}
       <OrbitControls
+        enabled={!placingMode}
         target={[9.5, 0, 9.5]}
         minPolarAngle={Math.PI / 10}
         maxPolarAngle={Math.PI / 2.1}
@@ -189,11 +188,19 @@ function Scene() {
 }
 
 export default function Board3D() {
+  const { isMyTurn, selectedPieceId } = useGameStore();
+  const placingMode = isMyTurn() && !!selectedPieceId;
+
   return (
     <Canvas
-      camera={{ position: [9.5, 22, 32], fov: 42 }}
+      camera={{ position: [9.5, 30, 22], fov: 40 }}
       shadows
-      style={{ background: '#0d1929', width: '100%', height: '100%' }}
+      style={{
+        background: '#0d1929',
+        width: '100%',
+        height: '100%',
+        cursor: placingMode ? 'crosshair' : 'grab',
+      }}
     >
       <Scene />
     </Canvas>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useGameStore } from '../store.js';
 import { COLOR_HEX } from '../colors.js';
 import socket from '../socket.js';
@@ -7,7 +7,20 @@ import Board3D from './Board3D.jsx';
 import PiecePanel from './PiecePanel.jsx';
 
 export default function Game() {
-  const { gameState, playerName, roomCode, color } = useGameStore();
+  const { gameState, playerName, roomCode, color, rotate, flip, setSelectedPiece, isMyTurn } = useGameStore();
+
+  // Keyboard shortcuts: R = rotate, F = flip, Escape = deselect
+  useEffect(() => {
+    function onKey(e) {
+      if (!isMyTurn()) return;
+      if (e.target.tagName === 'INPUT') return; // don't hijack text inputs
+      if (e.key === 'r' || e.key === 'R') rotate();
+      if (e.key === 'f' || e.key === 'F') flip();
+      if (e.key === 'Escape') setSelectedPiece(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [rotate, flip, setSelectedPiece, isMyTurn]);
   const isWaiting = gameState.status === 'waiting';
   const isFinished = gameState.status === 'finished';
   const isHost = gameState.players[0]?.name === playerName;
