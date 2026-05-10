@@ -119,7 +119,7 @@ export default function Lobby() {
 const styles = {
   root: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    minHeight: '100vh', background: '#0f172a', padding: 16,
+    minHeight: '100dvh', background: '#0f172a', padding: 16,
   },
   card: {
     background: '#1e293b', borderRadius: 16, padding: '32px 24px',

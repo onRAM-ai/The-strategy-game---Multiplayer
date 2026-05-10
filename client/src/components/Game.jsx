@@ -142,8 +142,8 @@ const styles = {
   root: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100vh',
-    width: '100vw',
+    height: '100dvh',  /* excludes browser URL bar + nav on mobile */
+    width: '100dvw',
     background: '#0d1929',
     overflow: 'hidden',
     position: 'relative',

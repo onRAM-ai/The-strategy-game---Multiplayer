@@ -286,9 +286,10 @@ const styles = {
     gap: 8,
     overflowX: 'auto',
     overflowY: 'hidden',
-    padding: '10px',
-    minHeight: 80,
+    padding: '8px 10px',
+    height: 96,
     touchAction: 'pan-x',
+    WebkitOverflowScrolling: 'touch',
   },
   pieceBtn: {
     flexShrink: 0,
@@ -299,7 +300,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'border-color 0.15s, background 0.15s, box-shadow 0.15s, opacity 0.15s',
-    minHeight: 70,
+    height: 80,
   },
   emptyMsg: {
     color: '#475569', fontSize: 12,
