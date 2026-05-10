@@ -4,37 +4,59 @@ import { COLOR_HEX } from '../colors.js';
 import { getAbsoluteSquares } from '../pieces.js';
 import { isValidPlacement } from '../validate.js';
 
-// Vertical offset (in CSS pixels) so the ghost piece appears above the finger
-// rather than under it. This is the difference between the touch point and
-// the piece's anchor cell.
 const POINTER_OFFSET_Y = 60;
 
-function pointerToCell(boardEl, clientX, clientY, N) {
+// Map a display (visual) cell to its underlying server cell, given the board's
+// CW rotation. The board is rotated so each player's start cell appears at the
+// bottom-left visually; the SERVER game state stays in canonical coordinates.
+function visualToServer(vr, vc, N, rotation) {
+  switch (rotation) {
+    case 90:  return [N - 1 - vc, vr];
+    case 180: return [N - 1 - vr, N - 1 - vc];
+    case 270: return [vc, N - 1 - vr];
+    default:  return [vr, vc];
+  }
+}
+
+function serverToVisual(sr, sc, N, rotation) {
+  switch (rotation) {
+    case 90:  return [sc, N - 1 - sr];
+    case 180: return [N - 1 - sr, N - 1 - sc];
+    case 270: return [N - 1 - sc, sr];
+    default:  return [sr, sc];
+  }
+}
+
+function pointerToServerCell(boardEl, clientX, clientY, N, rotation) {
   if (!boardEl) return null;
   const rect = boardEl.getBoundingClientRect();
   const cellSize = rect.width / N;
   const adjY = clientY - POINTER_OFFSET_Y;
-  const col = Math.floor((clientX - rect.left) / cellSize);
-  const row = Math.floor((adjY - rect.top) / cellSize);
-  if (row < -2 || col < -2 || row > N + 2 || col > N + 2) return null;
-  return [row, col];
+  const px = clientX - rect.left;
+  const py = adjY - rect.top;
+  const vc = Math.floor(px / cellSize);
+  const vr = Math.floor(py / cellSize);
+  if (vr < -2 || vc < -2 || vr > N + 2 || vc > N + 2) return null;
+  if (vr < 0 || vc < 0 || vr >= N || vc >= N) {
+    // Out of bounds: still convert so caller knows the invalid cell
+    return visualToServer(vr, vc, N, rotation);
+  }
+  return visualToServer(vr, vc, N, rotation);
 }
 
 export default function Board2D() {
-  const { gameState, color, dragState, updateDrag } = useGameStore();
+  const { gameState, color, dragState, updateDrag, boardRotation } = useGameStore();
   const boardRef = useRef(null);
 
   const N = gameState?.boardSize ?? 14;
   const startCell = gameState?.startCells?.[color];
   const isFirstMove = (gameState?.pieceCount?.[color] ?? 0) === 0;
+  const rotation = boardRotation();
 
-  // While dragging, recompute the ghost target as the pointer moves anywhere
-  // on the page. We listen at window level because pointer capture is set on
-  // the tray piece, not the board.
   useEffect(() => {
     if (!dragState.active) return;
     const handler = (e) => {
-      const cell = pointerToCell(boardRef.current, e.clientX, e.clientY, N);
+      const cell = pointerToServerCell(boardRef.current, e.clientX, e.clientY, N, rotation);
       if (!cell) {
         updateDrag({ targetCell: null, valid: false, pointerPos: { x: e.clientX, y: e.clientY } });
         return;
@@ -47,11 +69,11 @@ export default function Board2D() {
     };
     window.addEventListener('pointermove', handler);
     return () => window.removeEventListener('pointermove', handler);
-  }, [dragState.active, dragState.pieceId, dragState.rotation, dragState.flipped, gameState, color, N, startCell, isFirstMove, updateDrag]);
+  }, [dragState.active, dragState.pieceId, dragState.rotation, dragState.flipped, gameState, color, N, startCell, isFirstMove, rotation, updateDrag]);
 
   if (!gameState) return null;
 
-  // Build ghost cell set for overlay rendering
+  // Build set of server-coord cells that are part of the ghost
   let ghostSet = null;
   let ghostValid = false;
   if (dragState.active && dragState.targetCell) {
@@ -60,6 +82,9 @@ export default function Board2D() {
     ghostSet = new Set(abs.map(([r, c]) => `${r},${c}`));
     ghostValid = dragState.valid;
   }
+
+  const startVisual = startCell ? serverToVisual(startCell[0], startCell[1], N, rotation) : null;
+  const showStartLabel = isFirstMove && gameState.status === 'playing' && startCell;
 
   return (
     <div style={styles.wrap}>
@@ -71,25 +96,31 @@ export default function Board2D() {
           gridTemplateRows: `repeat(${N}, 1fr)`,
         }}
       >
-        {Array.from({ length: N }, (_, r) =>
-          Array.from({ length: N }, (_, c) => {
-            const cellColor = gameState.board[r][c];
-            const isStart = startCell && startCell[0] === r && startCell[1] === c && !cellColor;
-            const inGhost = ghostSet?.has(`${r},${c}`);
+        {Array.from({ length: N }, (_, vr) =>
+          Array.from({ length: N }, (_, vc) => {
+            const [sr, sc] = visualToServer(vr, vc, N, rotation);
+            const cellColor = gameState.board[sr][sc];
+            const isStart = startVisual && startVisual[0] === vr && startVisual[1] === vc && !cellColor;
+            const inGhost = ghostSet?.has(`${sr},${sc}`);
             return (
               <div
-                key={`${r}-${c}`}
+                key={`${vr}-${vc}`}
                 style={{
                   background: cellColor ? COLOR_HEX[cellColor] : '#0d1929',
                   position: 'relative',
                 }}
               >
-                {isStart && (
-                  <div style={{
-                    position: 'absolute', inset: '30%',
-                    background: COLOR_HEX[color],
-                    borderRadius: '50%', opacity: 0.5,
-                  }} />
+                {isStart && showStartLabel && (
+                  <>
+                    <div style={{
+                      position: 'absolute', inset: '20%',
+                      background: COLOR_HEX[color],
+                      borderRadius: '50%',
+                      opacity: 0.5,
+                      animation: 'startPulse 1.6s ease-in-out infinite',
+                    }} />
+                    <div style={styles.startLabel}>START</div>
+                  </>
                 )}
                 {inGhost && (
                   <div style={{
@@ -106,6 +137,12 @@ export default function Board2D() {
           })
         )}
       </div>
+      <style>{`
+        @keyframes startPulse {
+          0%, 100% { opacity: 0.4; transform: scale(0.92); }
+          50%      { opacity: 0.85; transform: scale(1.05); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -132,5 +169,19 @@ const styles = {
     touchAction: 'none',
     userSelect: 'none',
     WebkitUserSelect: 'none',
+  },
+  startLabel: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 'clamp(7px, 1.6vmin, 11px)',
+    fontWeight: 800,
+    letterSpacing: 0.5,
+    color: '#0f172a',
+    textShadow: '0 0 2px rgba(255,255,255,0.5)',
+    pointerEvents: 'none',
+    zIndex: 1,
   },
 };

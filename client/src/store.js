@@ -22,6 +22,7 @@ export const useGameStore = create((set, get) => ({
   errorMessage: null,
 
   selectedTabSize: 5,
+  trayExpanded: false,
   dragState: { ...EMPTY_DRAG },
 
   setPlayerName: (name) => set({ playerName: name }),
@@ -33,6 +34,8 @@ export const useGameStore = create((set, get) => ({
   setFlipped: (f) => set({ flipped: f }),
   setError: (msg) => set({ errorMessage: msg }),
   setSelectedTabSize: (n) => set({ selectedTabSize: n }),
+  setTrayExpanded: (expanded) => set({ trayExpanded: expanded }),
+  toggleTrayExpanded: () => set(s => ({ trayExpanded: !s.trayExpanded })),
 
   rotate: () => set(s => ({
     rotation: (s.rotation + 1) % 4,
@@ -52,6 +55,7 @@ export const useGameStore = create((set, get) => ({
     selectedPieceId: pieceId,
     rotation,
     flipped,
+    trayExpanded: false,
   }),
   updateDrag: (patch) => set(s => ({
     dragState: s.dragState.active ? { ...s.dragState, ...patch } : s.dragState,
@@ -67,5 +71,23 @@ export const useGameStore = create((set, get) => ({
     const { gameState, color } = get();
     if (!gameState || !color) return [];
     return gameState.remainingPieces?.[color] ?? [];
+  },
+
+  // Returns the CW board rotation in degrees (0/90/180/270) so the player's
+  // start cell appears in the bottom-left quadrant of the screen.
+  boardRotation() {
+    const { gameState, color } = get();
+    if (!gameState || !color) return 0;
+    const start = gameState.startCells?.[color];
+    if (!start) return 0;
+    const N = gameState.boardSize;
+    const [r, c] = start;
+    const half = N / 2;
+    const top = r < half;
+    const left = c < half;
+    if (top && left) return 270;
+    if (top && !left) return 180;
+    if (!top && !left) return 90;
+    return 0;
   },
 }));

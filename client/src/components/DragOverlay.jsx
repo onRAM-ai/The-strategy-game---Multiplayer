@@ -12,7 +12,7 @@ const POINTER_OFFSET_Y = 60;
 // board, but this floating preview always stays visible so the user has
 // continuous feedback even during transitions.
 function FloatingGhost() {
-  const { dragState, color } = useGameStore();
+  const { dragState, color, boardRotation } = useGameStore();
   if (!dragState.active) return null;
   const squares = getTransformedSquares(dragState.pieceId, dragState.rotation, dragState.flipped);
   const maxR = Math.max(...squares.map(s => s[0])) + 1;
@@ -20,17 +20,22 @@ function FloatingGhost() {
   const set = new Set(squares.map(([r, c]) => `${r},${c}`));
   const width = maxC * FLOAT_CELL + (maxC - 1);
   const height = maxR * FLOAT_CELL + (maxR - 1);
+  // Match the board's CW rotation so the floating preview reads the same way
+  // it'll appear when placed on the board.
+  const rot = boardRotation();
   return (
     <div
       style={{
         position: 'fixed',
-        left: dragState.pointerPos.x - width / 2,
-        top: dragState.pointerPos.y - POINTER_OFFSET_Y - height / 2,
+        left: dragState.pointerPos.x,
+        top: dragState.pointerPos.y - POINTER_OFFSET_Y,
         pointerEvents: 'none',
         zIndex: 50,
         opacity: dragState.targetCell ? 0.35 : 0.85,
         transition: 'opacity 0.1s',
         filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))',
+        transform: `translate(-50%, -50%) rotate(${rot}deg)`,
+        transformOrigin: 'center center',
       }}
     >
       <div style={{
@@ -38,6 +43,7 @@ function FloatingGhost() {
         gridTemplateRows: `repeat(${maxR}, ${FLOAT_CELL}px)`,
         gridTemplateColumns: `repeat(${maxC}, ${FLOAT_CELL}px)`,
         gap: 1,
+        width, height,
       }}>
         {Array.from({ length: maxR }, (_, r) =>
           Array.from({ length: maxC }, (_, c) => (
