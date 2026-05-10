@@ -1,16 +1,33 @@
 import { PIECES, PIECE_MAP, getAbsoluteSquares } from './pieces.js';
 import { isValidPlacement } from './validate.js';
 
-const COLORS = ['blue', 'yellow', 'red', 'green'];
+const FORMAT_CONFIG = {
+  duo: {
+    boardSize: 14,
+    maxPlayers: 2,
+    colors: ['blue', 'yellow'],
+    startCells: { blue: [4, 4], yellow: [9, 9] },
+  },
+  classic: {
+    boardSize: 20,
+    maxPlayers: 4,
+    colors: ['blue', 'yellow', 'red', 'green'],
+    startCells: { blue: [0, 0], yellow: [0, 19], red: [19, 19], green: [19, 0] },
+  },
+};
 
 export class GameRoom {
-  constructor(id) {
+  constructor(id, format = 'duo') {
+    if (!FORMAT_CONFIG[format]) format = 'duo';
     this.id = id;
+    this.format = format;
+    this.config = FORMAT_CONFIG[format];
+
     this.players = [];
-    this.board = Array(20).fill(null).map(() => Array(20).fill(null));
+    this.board = Array(this.config.boardSize).fill(null).map(() => Array(this.config.boardSize).fill(null));
     this.currentTurn = 0;
     this.remainingPieces = {};
-    this.pieceCount = {}; // how many pieces each color has placed
+    this.pieceCount = {};
     this.status = 'waiting';
     this.passCount = 0;
     this.scores = {};
@@ -25,10 +42,10 @@ export class GameRoom {
       existing.connected = true;
       return { player: existing, isNew: false };
     }
-    if (this.players.length >= 4) return { error: 'Room is full' };
+    if (this.players.length >= this.config.maxPlayers) return { error: 'Room is full' };
     if (this.status !== 'waiting') return { error: 'Game already started' };
 
-    const color = COLORS[this.players.length];
+    const color = this.config.colors[this.players.length];
     const player = { id: name, name, color, connected: true, socketId };
     this.players.push(player);
     return { player, isNew: true };
@@ -63,8 +80,9 @@ export class GameRoom {
 
     const absoluteSquares = getAbsoluteSquares(pieceId, rotation, flipped, row, col);
     const isFirstMove = this.pieceCount[color] === 0;
+    const startCell = this.config.startCells[color];
 
-    if (!isValidPlacement(this.board, absoluteSquares, color, isFirstMove)) {
+    if (!isValidPlacement(this.board, absoluteSquares, color, isFirstMove, this.config.boardSize, startCell)) {
       return { error: 'Invalid placement' };
     }
 
@@ -127,6 +145,10 @@ export class GameRoom {
   getState() {
     return {
       id: this.id,
+      format: this.format,
+      boardSize: this.config.boardSize,
+      maxPlayers: this.config.maxPlayers,
+      startCells: this.config.startCells,
       players: this.players.map(p => ({ name: p.name, color: p.color, connected: p.connected })),
       board: this.board,
       currentTurn: this.currentTurn,

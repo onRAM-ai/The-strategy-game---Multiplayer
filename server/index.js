@@ -32,9 +32,9 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 io.on('connection', (socket) => {
   console.log('connect', socket.id);
 
-  socket.on('create_room', ({ playerName }) => {
+  socket.on('create_room', ({ playerName, format }) => {
     const code = generateRoomCode();
-    const room = new GameRoom(code);
+    const room = new GameRoom(code, format);
     rooms.set(code, room);
 
     const result = room.addPlayer(socket.id, playerName);
